@@ -23,6 +23,7 @@ from queue import Queue, Full
 from threading import Thread, Event
 from typing import TYPE_CHECKING, Optional
 
+# import yappi
 from skywalking import config, plugins
 from skywalking import loggings
 from skywalking import meter
@@ -94,6 +95,7 @@ class SkyWalkingAgent(Singleton):
         elif config.agent_protocol == 'kafka':
             from skywalking.agent.protocol.kafka import KafkaProtocol
             self.__protocol = KafkaProtocol()
+        logger.info('Using %s protocol', config.agent_protocol)
 
         # Initialize queues for segment, log, meter and profiling snapshots
         self.__segment_queue: Optional[Queue] = None
@@ -192,6 +194,8 @@ class SkyWalkingAgent(Singleton):
         # Fork support is controlled by config.agent_fork_support :default: False
         # Important: This does not impact pre-forking server support (uwsgi, gunicorn, etc...)
         # This is only for explicit long-running fork() calls.
+        if config.agent_protocol == 'kafka':
+            self.__protocol.clean_confluent_kafka_local_queue()
         config.agent_instance_name = f'{config.agent_instance_name}-child({os.getpid()})'
         self.start()
         logger.info(f'Agent spawned as {config.agent_instance_name} for service {config.agent_name}.')
@@ -204,6 +208,9 @@ class SkyWalkingAgent(Singleton):
 
         When os.fork(), the service instance should be changed to a new one by appending pid.
         """
+        # if config.agent_sw_python_cli_debug_enabled:
+        #     yappi.start()
+        
         loggings.init()
 
         if sys.version_info < (3, 7):
@@ -290,8 +297,20 @@ class SkyWalkingAgent(Singleton):
         if config.agent_meter_reporter_active:
             self.__protocol.report_meter(self.__meter_queue, False)
             self.__meter_queue.join()
+        
+        if config.agent_protocol == 'kafka':
+            self.__protocol.clean_confluent_kafka_local_queue()
 
         self._finished.set()
+
+        # if config.agent_sw_python_cli_debug_enabled:
+        #     yappi.stop()
+
+        #     # retrieve thread stats by their thread id (given by yappi)
+        #     threads = yappi.get_thread_stats()
+        #     for thread in threads:
+        #         logger.debug('Yappi Function stats for (%s) (%d)' % (thread.name, thread.id))
+        #         yappi.get_func_stats(ctx_id=thread.id).print_all(out=open(<yappi report file path>, 'w+'))
 
     def stop(self) -> None:
         """

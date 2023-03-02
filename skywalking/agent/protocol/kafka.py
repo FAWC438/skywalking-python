@@ -162,6 +162,14 @@ class KafkaProtocol(Protocol):
             logger.debug('Reporting Meter')
         self.meter_reporter.report(generator=generator())
 
+    def clean_confluent_kafka_local_queue(self):
+        self.service_management.producer.flush()
+        self.traces_reporter.producer.flush()
+        self.log_reporter.producer.flush()
+        self.meter_reporter.producer.flush()
+        if logger_debug_enabled:
+            logger.debug('Kafka local queue cleaned')
+
     # TODO: implement profiling for kafka
     def report_snapshot(self, queue: Queue, block: bool = True):
         ...

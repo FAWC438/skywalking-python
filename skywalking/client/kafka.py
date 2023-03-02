@@ -35,6 +35,7 @@ def __init_kafka_configs():
     # kafka_configs['bootstrap_servers'] = config.kafka_bootstrap_servers.split(',')
     # confluent-kafka-python
     kafka_configs['bootstrap.servers'] = config.kafka_bootstrap_servers
+    
     # process all kafka configs in env
     kafka_keys = [key for key in os.environ.keys() if key.startswith('SW_KAFKA_REPORTER_CONFIG_')]
     for kafka_key in kafka_keys:
@@ -65,12 +66,12 @@ __init_kafka_configs()
 
 
 class KafkaServiceManagementClient(ServiceManagementClient):
-    def __init__(self, loop=None):
+    def __init__(self):
         super().__init__()
         self.instance_properties = self.get_instance_properties_proto()
 
         if logger_debug_enabled:
-            logger.debug('kafka reporter configs: %s', kafka_configs)
+            logger.debug('Kafka reporter configs: %s', kafka_configs)
         # self.producer = KafkaProducer(**kafka_configs)
         self.producer = Producer(kafka_configs)
         self.topic_key_register = 'register-'
@@ -88,7 +89,17 @@ class KafkaServiceManagementClient(ServiceManagementClient):
         key = bytes(self.topic_key_register + instance.serviceInstance, encoding='utf-8')
         value = instance.SerializeToString()
         # self.producer.send(topic=self.topic, key=key, value=value)
-        self.producer.produce(topic=self.topic, key=key, value=value)
+        # poll() can be used to trigger delivery report callbacks
+        # but it can also clearn up the internal queue without any performance impact
+        # see https://github.com/confluentinc/confluent-kafka-dotnet/issues/703#issuecomment-573777022
+        try:
+            self.producer.produce(topic=self.topic, key=key, value=value)
+            self.producer.poll(0)
+        except BufferError:
+            logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+            self.producer.poll(10)
+            self.producer.produce(topic=self.topic, key=key, value=value)
+
 
     def send_heart_beat(self):
         self.refresh_instance_props()
@@ -127,10 +138,21 @@ class KafkaServiceManagementClient(ServiceManagementClient):
                     logger.error('heartbeat error: %s', err)
                 else:
                     logger.debug('heartbeat response: %s', msg)
-            self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
-            self.producer.flush()
+            try:
+                self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
+                self.producer.poll(0)
+            except BufferError:
+                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                self.producer.poll(10)
+                self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
         else:
-            self.producer.produce(topic=self.topic, key=key, value=value)
+            try:
+                self.producer.produce(topic=self.topic, key=key, value=value)
+                self.producer.poll(0)
+            except BufferError:
+                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                self.producer.poll(10)
+                self.producer.produce(topic=self.topic, key=key, value=value)
 
 
 class KafkaTraceSegmentReportService(TraceSegmentReportService):
@@ -144,7 +166,13 @@ class KafkaTraceSegmentReportService(TraceSegmentReportService):
             key = bytes(segment.traceSegmentId, encoding='utf-8')
             value = segment.SerializeToString()
             # self.producer.send(topic=self.topic, key=key, value=value)
-            self.producer.produce(topic=self.topic, key=key, value=value)
+            try:
+                self.producer.produce(topic=self.topic, key=key, value=value)
+                self.producer.poll(0)
+            except BufferError:
+                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                self.producer.poll(10)
+                self.producer.produce(topic=self.topic, key=key, value=value)
 
 
 class KafkaLogDataReportService(LogDataReportService):
@@ -158,7 +186,13 @@ class KafkaLogDataReportService(LogDataReportService):
             key = bytes(log_data.traceContext.traceSegmentId, encoding='utf-8')
             value = log_data.SerializeToString()
             # self.producer.send(topic=self.topic, key=key, value=value)
-            self.producer.produce(topic=self.topic, key=key, value=value)
+            try:
+                self.producer.produce(topic=self.topic, key=key, value=value)
+                self.producer.poll(0)
+            except BufferError:
+                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                self.producer.poll(10)
+                self.producer.produce(topic=self.topic, key=key, value=value)
 
 
 class KafkaMeterDataReportService(MeterReportService):
@@ -173,7 +207,13 @@ class KafkaMeterDataReportService(MeterReportService):
         key = bytes(config.agent_instance_name, encoding='utf-8')
         value = collection.SerializeToString()
         # self.producer.send(topic=self.topic, key=key, value=value)
-        self.producer.produce(topic=self.topic, key=key, value=value)
+        try:
+            self.producer.produce(topic=self.topic, key=key, value=value)
+            self.producer.poll(0)
+        except BufferError:
+            logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+            self.producer.poll(10)
+            self.producer.produce(topic=self.topic, key=key, value=value)
 
 
 class KafkaConfigDuplicated(Exception):
