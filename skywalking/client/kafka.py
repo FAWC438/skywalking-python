@@ -18,7 +18,7 @@
 import ast
 import os
 
-# from kafka import KafkaProducer
+from kafka import KafkaProducer
 from confluent_kafka import Producer
 
 from skywalking import config
@@ -28,18 +28,29 @@ from skywalking.protocol.language_agent.Meter_pb2 import MeterDataCollection
 from skywalking.protocol.management.Management_pb2 import InstancePingPkg, InstanceProperties
 
 kafka_configs = {}
+confluent_kafka_enabled = False
 
 
 def __init_kafka_configs():
-    # kafka-python
-    # kafka_configs['bootstrap_servers'] = config.kafka_bootstrap_servers.split(',')
-    # confluent-kafka-python
-    kafka_configs['bootstrap.servers'] = config.kafka_bootstrap_servers
-    
+    global confluent_kafka_enabled
+    if os.getenv('prefork') == 'gunicorn':
+        # only guniconn can use confluent_kafka
+        confluent_kafka_enabled = True
+
+    if confluent_kafka_enabled:
+        kafka_configs['bootstrap.servers'] = config.kafka_bootstrap_servers
+    else:
+        kafka_configs['bootstrap_servers'] = config.kafka_bootstrap_servers.split(',')
+
     # process all kafka configs in env
     kafka_keys = [key for key in os.environ.keys() if key.startswith('SW_KAFKA_REPORTER_CONFIG_')]
     for kafka_key in kafka_keys:
         key = kafka_key[25:]
+        if confluent_kafka_enabled:
+            # Although the content of configs is basically the same
+            # - kafka-python: use '_' to separate config words
+            # - confluent-kafka-python: use '.' to separate config words
+            key = key.replace('_', '.')
         val = os.environ.get(kafka_key)
 
         if val is not None:
@@ -47,11 +58,8 @@ def __init_kafka_configs():
                 val = int(val)
             elif val in ['True', 'False']:
                 val = ast.literal_eval(val)
-            else:
-                # Although the content of configs is basically the same
-                # - kafka-python: use '_' to separate config words
-                # - confluent-kafka-python: use '.' to separate config words
-                val.replace('_', '.')
+            elif confluent_kafka_enabled:
+                val = val.replace('_', '.')
         else:
             continue
 
@@ -72,8 +80,10 @@ class KafkaServiceManagementClient(ServiceManagementClient):
 
         if logger_debug_enabled:
             logger.debug('Kafka reporter configs: %s', kafka_configs)
-        # self.producer = KafkaProducer(**kafka_configs)
-        self.producer = Producer(kafka_configs)
+        if confluent_kafka_enabled:
+            self.producer = Producer(kafka_configs)
+        else:
+            self.producer = KafkaProducer(**kafka_configs)
         self.topic_key_register = 'register-'
         self.topic = config.kafka_topic_management
 
@@ -88,17 +98,19 @@ class KafkaServiceManagementClient(ServiceManagementClient):
 
         key = bytes(self.topic_key_register + instance.serviceInstance, encoding='utf-8')
         value = instance.SerializeToString()
-        # self.producer.send(topic=self.topic, key=key, value=value)
-        # poll() can be used to trigger delivery report callbacks
-        # but it can also clearn up the internal queue without any performance impact
-        # see https://github.com/confluentinc/confluent-kafka-dotnet/issues/703#issuecomment-573777022
-        try:
-            self.producer.produce(topic=self.topic, key=key, value=value)
-            self.producer.poll(0)
-        except BufferError:
-            logger.warn('kafka producer Buffer full, waiting for free space on the queue')
-            self.producer.poll(10)
-            self.producer.produce(topic=self.topic, key=key, value=value)
+        if confluent_kafka_enabled:
+            # poll() can be used to trigger delivery report callbacks
+            # but it can also clearn up the internal queue without any performance impact
+            # see https://github.com/confluentinc/confluent-kafka-dotnet/issues/703#issuecomment-573777022
+            try:
+                self.producer.produce(topic=self.topic, key=key, value=value)
+                self.producer.poll(0)
+            except BufferError:
+                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                self.producer.poll(10)
+                self.producer.produce(topic=self.topic, key=key, value=value)
+        else:
+            self.producer.send(topic=self.topic, key=key, value=value)
 
 
     def send_heart_beat(self):
@@ -119,86 +131,89 @@ class KafkaServiceManagementClient(ServiceManagementClient):
         key = bytes(instance_ping_pkg.serviceInstance, encoding='utf-8')
         value = instance_ping_pkg.SerializeToString()
 
-        # kafka-python future object is similar to confluent-kafka-python flush() function
-        # in that they both implement similar blocking callbacks (for debug here).
-        # However, this is contrary to the purpose of the async optimization in version 1.1
-        #
-        # There is a best practice for async callback in confluent official blog:
-        # https://www.confluent.io/blog/kafka-python-asyncio-integration/
-        # Although creating a new thread specifically for heartbeat is also unnecessary
-
-        # future = self.producer.send(topic=self.topic, key=key, value=value)
-        # res = future.get(timeout=10)
-        # if logger_debug_enabled:
-        #     logger.debug('heartbeat response: %s', res)
-
-        if logger_debug_enabled:
-            def heartbeat_callback(err, msg):
-                if err:
-                    logger.error('heartbeat error: %s', err)
-                else:
-                    logger.debug('heartbeat response: %s', msg)
-            try:
-                self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
-                self.producer.poll(0)
-            except BufferError:
-                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
-                self.producer.poll(10)
-                self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
+        if confluent_kafka_enabled:
+            if logger_debug_enabled:
+                def heartbeat_callback(err, msg):
+                    if err:
+                        logger.error('heartbeat error: %s', err)
+                    else:
+                        logger.debug('heartbeat response: %s', msg)
+                try:
+                    self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
+                    self.producer.poll(0)
+                except BufferError:
+                    logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                    self.producer.poll(10)
+                    self.producer.produce(topic=self.topic, key=key, value=value, on_delivery=heartbeat_callback)
+            else:
+                try:
+                    self.producer.produce(topic=self.topic, key=key, value=value)
+                    self.producer.poll(0)
+                except BufferError:
+                    logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                    self.producer.poll(10)
+                    self.producer.produce(topic=self.topic, key=key, value=value)
         else:
-            try:
-                self.producer.produce(topic=self.topic, key=key, value=value)
-                self.producer.poll(0)
-            except BufferError:
-                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
-                self.producer.poll(10)
-                self.producer.produce(topic=self.topic, key=key, value=value)
+            future = self.producer.send(topic=self.topic, key=key, value=value)
+            res = future.get(timeout=10)
+            if logger_debug_enabled:
+                logger.debug('heartbeat response: %s', res)
 
 
 class KafkaTraceSegmentReportService(TraceSegmentReportService):
     def __init__(self):
-        # self.producer = KafkaProducer(**kafka_configs)
-        self.producer = Producer(kafka_configs)
+        if confluent_kafka_enabled:
+            self.producer = Producer(kafka_configs)
+        else:
+            self.producer = KafkaProducer(**kafka_configs)
         self.topic = config.kafka_topic_segment
 
     def report(self, generator):
         for segment in generator:
             key = bytes(segment.traceSegmentId, encoding='utf-8')
             value = segment.SerializeToString()
-            # self.producer.send(topic=self.topic, key=key, value=value)
-            try:
-                self.producer.produce(topic=self.topic, key=key, value=value)
-                self.producer.poll(0)
-            except BufferError:
-                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
-                self.producer.poll(10)
-                self.producer.produce(topic=self.topic, key=key, value=value)
+            if confluent_kafka_enabled:
+                try:
+                    self.producer.produce(topic=self.topic, key=key, value=value)
+                    self.producer.poll(0)
+                except BufferError:
+                    logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                    self.producer.poll(10)
+                    self.producer.produce(topic=self.topic, key=key, value=value)
+            else:
+                self.producer.send(topic=self.topic, key=key, value=value)
 
 
 class KafkaLogDataReportService(LogDataReportService):
     def __init__(self):
-        # self.producer = KafkaProducer(**kafka_configs)
-        self.producer = Producer(kafka_configs)
+        if confluent_kafka_enabled:
+            self.producer = Producer(kafka_configs)
+        else:
+            self.producer = KafkaProducer(**kafka_configs)
         self.topic = config.kafka_topic_log
 
     def report(self, generator):
         for log_data in generator:
             key = bytes(log_data.traceContext.traceSegmentId, encoding='utf-8')
             value = log_data.SerializeToString()
-            # self.producer.send(topic=self.topic, key=key, value=value)
-            try:
-                self.producer.produce(topic=self.topic, key=key, value=value)
-                self.producer.poll(0)
-            except BufferError:
-                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
-                self.producer.poll(10)
-                self.producer.produce(topic=self.topic, key=key, value=value)
+            if confluent_kafka_enabled:
+                try:
+                    self.producer.produce(topic=self.topic, key=key, value=value)
+                    self.producer.poll(0)
+                except BufferError:
+                    logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                    self.producer.poll(10)
+                    self.producer.produce(topic=self.topic, key=key, value=value)
+            else:
+                self.producer.send(topic=self.topic, key=key, value=value)
 
 
 class KafkaMeterDataReportService(MeterReportService):
     def __init__(self):
-        # self.producer = KafkaProducer(**kafka_configs)
-        self.producer = Producer(kafka_configs)
+        if confluent_kafka_enabled:
+            self.producer = Producer(kafka_configs)
+        else:
+            self.producer = KafkaProducer(**kafka_configs)
         self.topic = config.kafka_topic_meter
 
     def report(self, generator):
@@ -206,14 +221,16 @@ class KafkaMeterDataReportService(MeterReportService):
         collection.meterData.extend(list(generator))
         key = bytes(config.agent_instance_name, encoding='utf-8')
         value = collection.SerializeToString()
-        # self.producer.send(topic=self.topic, key=key, value=value)
-        try:
-            self.producer.produce(topic=self.topic, key=key, value=value)
-            self.producer.poll(0)
-        except BufferError:
-            logger.warn('kafka producer Buffer full, waiting for free space on the queue')
-            self.producer.poll(10)
-            self.producer.produce(topic=self.topic, key=key, value=value)
+        if confluent_kafka_enabled:
+            try:
+                self.producer.produce(topic=self.topic, key=key, value=value)
+                self.producer.poll(0)
+            except BufferError:
+                logger.warn('kafka producer Buffer full, waiting for free space on the queue')
+                self.producer.poll(10)
+                self.producer.produce(topic=self.topic, key=key, value=value)
+        else:
+            self.producer.send(topic=self.topic, key=key, value=value)
 
 
 class KafkaConfigDuplicated(Exception):

@@ -210,7 +210,6 @@ class SkyWalkingAgent(Singleton):
         """
         # if config.agent_sw_python_cli_debug_enabled:
         #     yappi.start()
-        
         loggings.init()
 
         if sys.version_info < (3, 7):
@@ -297,7 +296,7 @@ class SkyWalkingAgent(Singleton):
         if config.agent_meter_reporter_active:
             self.__protocol.report_meter(self.__meter_queue, False)
             self.__meter_queue.join()
-        
+
         if config.agent_protocol == 'kafka':
             self.__protocol.clean_confluent_kafka_local_queue()
 

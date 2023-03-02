@@ -22,7 +22,7 @@ from time import time
 from skywalking import config
 from skywalking.agent import Protocol
 from skywalking.client.kafka import KafkaServiceManagementClient, KafkaTraceSegmentReportService, \
-    KafkaLogDataReportService, KafkaMeterDataReportService
+    KafkaLogDataReportService, KafkaMeterDataReportService, confluent_kafka_enabled
 from skywalking.loggings import logger, getLogger, logger_debug_enabled
 from skywalking.protocol.common.Common_pb2 import KeyStringValuePair
 from skywalking.protocol.language_agent.Tracing_pb2 import SegmentObject, SpanObject, Log, SegmentReference
@@ -163,12 +163,15 @@ class KafkaProtocol(Protocol):
         self.meter_reporter.report(generator=generator())
 
     def clean_confluent_kafka_local_queue(self):
+        if not confluent_kafka_enabled:
+            return
+        # only for confluent-kafka
         self.service_management.producer.flush()
         self.traces_reporter.producer.flush()
         self.log_reporter.producer.flush()
         self.meter_reporter.producer.flush()
         if logger_debug_enabled:
-            logger.debug('Kafka local queue cleaned')
+            logger.debug('Confluent-Kafka local queue cleaned')
 
     # TODO: implement profiling for kafka
     def report_snapshot(self, queue: Queue, block: bool = True):
