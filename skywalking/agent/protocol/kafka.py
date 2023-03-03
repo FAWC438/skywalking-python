@@ -166,10 +166,10 @@ class KafkaProtocol(Protocol):
         if not confluent_kafka_enabled:
             return
         # only for confluent-kafka
-        self.service_management.producer.flush()
-        self.traces_reporter.producer.flush()
-        self.log_reporter.producer.flush()
-        self.meter_reporter.producer.flush()
+        self.service_management.producer.clean_queue()
+        self.traces_reporter.producer.clean_queue()
+        self.log_reporter.producer.clean_queue()
+        self.meter_reporter.producer.clean_queue()
         if logger_debug_enabled:
             logger.debug('Confluent-Kafka local queue cleaned')
 

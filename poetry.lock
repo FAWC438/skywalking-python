@@ -1698,6 +1698,17 @@ files = [
 ]
 
 [[package]]
+name = "library"
+version = "0.0.0"
+description = "Useful library package stuff."
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "Library-0.0.0.tar.gz", hash = "sha256:f1b5c50d6e4baeb45c251ca83991c1880d44769621bc94078535513435c9b917"},
+]
+
+[[package]]
 name = "loguru"
 version = "0.6.0"
 description = "Python logging made (stupidly) simple"
@@ -3732,4 +3743,4 @@ kafka = ["kafka-python"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.7, <3.12"
-content-hash = "77fcf4b1bcf70276d9f6b4b92e7aae2c2e3d51f963403ccf530843767f6aad5f"
+content-hash = "4eb76d264c9a2dfff7a0b5f8bc9e89461c5e236aa0f18cbdff0d2bbae35bbbc8"

@@ -20,7 +20,7 @@ or a limitation of SkyWalking auto-instrumentation (welcome to contribute!)
 | [asyncpg](https://github.com/MagicStack/asyncpg) | Python >=3.7 - ['0.25.0'];  | `sw_asyncpg` |
 | [bottle](http://bottlepy.org/docs/dev/) | Python >=3.7 - ['0.12.23'];  | `sw_bottle` |
 | [celery](https://docs.celeryq.dev) | Python >=3.7 - ['5.1'];  | `sw_celery` |
-| [confluent_kafka](https://www.confluent.io/) | Python >=3.7 - ['1.5.0', '1.7.0', '1.8.2'];  | `sw_confluent_kafka` |
+| [confluent_kafka](https://www.confluent.io/) | Python >=3.7 - NOT SUPPORTED YET;  | `sw_confluent_kafka` |
 | [django](https://www.djangoproject.com/) | Python >=3.7 - ['3.2'];  | `sw_django` |
 | [elasticsearch](https://github.com/elastic/elasticsearch-py) | Python >=3.7 - ['7.13', '7.14', '7.15'];  | `sw_elasticsearch` |
 | [hug](https://falcon.readthedocs.io/en/stable/) | Python >=3.11 - NOT SUPPORTED YET; Python >=3.10 - ['2.5', '2.6']; Python >=3.7 - ['2.4.1', '2.5', '2.6'];  | `sw_falcon` |
