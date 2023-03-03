@@ -71,6 +71,7 @@ def __init_kafka_configs():
 
 __init_kafka_configs()
 
+
 class KafkaProducerClient():
     def __init__(self):
         if confluent_kafka_enabled:
@@ -80,7 +81,7 @@ class KafkaProducerClient():
             from kafka import KafkaProducer
             self.producer_client = KafkaProducer(**kafka_configs)
 
-    def send(self,topic:str, key=None, value=None, callback=None):
+    def send(self, topic: str, key=None, value=None, callback=None):
         if confluent_kafka_enabled:
             # poll() can be used to trigger delivery report callbacks
             # but it can also clearn up the internal queue without any performance impact
@@ -96,11 +97,12 @@ class KafkaProducerClient():
         else:
             future = self.producer_client.send(topic=topic, key=key, value=value)
             return future
-    
+
     def clean_queue(self):
         """Clean up the internal queue, only for confluent_kafka_enabled"""
         if confluent_kafka_enabled:
             self.producer_client.flush()
+
 
 class KafkaServiceManagementClient(ServiceManagementClient):
     def __init__(self):
@@ -125,7 +127,6 @@ class KafkaServiceManagementClient(ServiceManagementClient):
         key = bytes(self.topic_key_register + instance.serviceInstance, encoding='utf-8')
         value = instance.SerializeToString()
         self.producer.send(topic=self.topic, key=key, value=value)
-
 
     def send_heart_beat(self):
         self.refresh_instance_props()
