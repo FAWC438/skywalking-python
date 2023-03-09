@@ -31,10 +31,16 @@ confluent_kafka_enabled = False
 
 def __init_kafka_configs():
     global confluent_kafka_enabled
-    prefork_server_detected = os.getenv('prefork')
-    if prefork_server_detected == 'gunicorn' or not prefork_server_detected:
-        # only guniconn or non-prefork model can use confluent_kafka
-        confluent_kafka_enabled = True
+
+    if config.kafka_confluent_enabled:
+        prefork_server_detected = os.getenv('prefork')
+        if prefork_server_detected == 'gunicorn' or not prefork_server_detected:
+            # only guniconn or non-prefork model can use confluent_kafka
+            confluent_kafka_enabled = True
+            logger.info('Confluent-kafka-python is enabled')
+
+    if not confluent_kafka_enabled:
+        logger.info('Kafka-python is enabled')
 
     if confluent_kafka_enabled:
         kafka_configs['bootstrap.servers'] = config.kafka_bootstrap_servers

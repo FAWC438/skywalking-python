@@ -73,6 +73,15 @@ kafka_topic_meter: str = os.getenv('SW_KAFKA_TOPIC_METER', 'skywalking-meters')
 # [here](https://kafka-python.readthedocs.io/en/master/apidoc/KafkaProducer.html#kafka.KafkaProducer)
 # This config only works from env variables, each one should be passed in `SW_KAFKA_REPORTER_CONFIG_<KEY_NAME>`
 kafka_reporter_custom_configurations: str = os.getenv('SW_KAFKA_REPORTER_CUSTOM_CONFIGURATIONS', '')
+# WARNING: This feature is still experimental, and may cause unexpected errors,
+# especially if fork() or pre-fork model is used in your application.
+# Allows the use of the confluent-kafka-python library as the kafka client,
+# which will replace the default kafka-python library.
+# After benchmarking, enabling this feature can boost the throughput of the application by more than 2 times.
+# For the pre-fork model, only Gunicorn is supported.
+# And this feature will now extend the start time of Gunicorn applications to more than 30 seconds.
+# For more information check [here](https://github.com/apache/skywalking/issues/10447).
+kafka_confluent_enabled: bool = os.getenv('SW_KAFKA_CONFLUENT_ENABLED', '').lower() == 'true'
 # Use TLS for communication with SkyWalking OAP (no cert required)
 agent_force_tls: bool = os.getenv('SW_AGENT_FORCE_TLS', '').lower() == 'true'
 # The authentication token to verify that the agent is trusted by the backend OAP, as for how to configure the

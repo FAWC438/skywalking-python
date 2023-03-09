@@ -86,6 +86,7 @@ class SkyWalkingAgent(Singleton):
     def __bootstrap(self):
         # when forking, already instrumented modules must not be instrumented again
         # otherwise it will cause double instrumentation! (we should provide an un-instrument method)
+        logger.info('Using %s protocol', config.agent_protocol)
         if config.agent_protocol == 'grpc':
             from skywalking.agent.protocol.grpc import GrpcProtocol
             self.__protocol = GrpcProtocol()
@@ -95,7 +96,10 @@ class SkyWalkingAgent(Singleton):
         elif config.agent_protocol == 'kafka':
             from skywalking.agent.protocol.kafka import KafkaProtocol
             self.__protocol = KafkaProtocol()
-        logger.info('Using %s protocol', config.agent_protocol)
+            if config.kafka_confluent_enabled:
+                logger.warning('You have enabled the Confluent Kafka client feature, which is currently experimental.'
+                               'Remember that the Confluent-Kafka-python module is only available '
+                               'if you are using the Gunicorn or non-pre-fork models')
 
         # Initialize queues for segment, log, meter and profiling snapshots
         self.__segment_queue: Optional[Queue] = None
