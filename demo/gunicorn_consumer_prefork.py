@@ -20,6 +20,7 @@ This one demos how to use gunicorn with a simple fastapi uvicorn app.
 import logging
 
 from fastapi import FastAPI
+import uvicorn
 
 """
 # Run this to see sw-python working with gunicorn
@@ -43,5 +44,4 @@ async def application():
 
 if __name__ == '__main__':
     # noinspection PyTypeChecker
-    # uvicorn.run(app, host='0.0.0.0', port=8088)
-    ...
+    uvicorn.run(app, host='0.0.0.0', port=8086)

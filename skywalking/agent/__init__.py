@@ -19,6 +19,7 @@ import atexit
 import functools
 import os
 import sys
+import time
 from queue import Queue, Full
 from threading import Thread, Event
 from typing import TYPE_CHECKING, Optional
@@ -213,6 +214,7 @@ class SkyWalkingAgent(Singleton):
         When os.fork(), the service instance should be changed to a new one by appending pid.
         """
         # if config.agent_sw_python_cli_debug_enabled:
+        #     logger.debug('yappi started')
         #     yappi.start()
         loggings.init()
 
@@ -308,12 +310,15 @@ class SkyWalkingAgent(Singleton):
 
         # if config.agent_sw_python_cli_debug_enabled:
         #     yappi.stop()
+        #     logger.debug('yappi stopped')
 
         #     # retrieve thread stats by their thread id (given by yappi)
-        #     threads = yappi.get_thread_stats()
-        #     for thread in threads:
-        #         logger.debug('Yappi Function stats for (%s) (%d)' % (thread.name, thread.id))
-        #         yappi.get_func_stats(ctx_id=thread.id).print_all(out=open(<yappi report file path>, 'w+'))
+        #     # threads = yappi.get_thread_stats()
+        #     # for thread in threads:
+        #     #     logger.debug('Yappi Function stats for (%s) (%d)' % (thread.name, thread.id))
+        #     #     yappi.get_func_stats(ctx_id=thread.id).print_all(out=open('/home/lgh/logs/yappi_thread.log', 'a+'))
+        #     yappi.get_func_stats().print_all(out=open('/home/lgh/logs/yappi_fun.log', 'w+'))
+        #     yappi.get_thread_stats().print_all(out=open('/home/lgh/logs/yappi_thread.log', 'w+'))
 
     def stop(self) -> None:
         """
@@ -327,12 +332,12 @@ class SkyWalkingAgent(Singleton):
     def __heartbeat(self) -> None:
         self.__protocol.heartbeat()
 
-    @report_with_backoff(reporter_name='segment', init_wait=0)
+    @report_with_backoff(reporter_name='segment', init_wait=0.1)
     def __report_segment(self) -> None:
         if not self.__segment_queue.empty():
             self.__protocol.report_segment(self.__segment_queue)
 
-    @report_with_backoff(reporter_name='log', init_wait=0)
+    @report_with_backoff(reporter_name='log', init_wait=0.1)
     def __report_log(self) -> None:
         if not self.__log_queue.empty():
             self.__protocol.report_log(self.__log_queue)
