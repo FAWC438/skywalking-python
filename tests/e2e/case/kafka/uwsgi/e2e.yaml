@@ -28,7 +28,7 @@ setup:
 
 trigger:
   action: http      # The action of the trigger. support HTTP invoke.
-  interval: 3s      # Trigger the action every 3 seconds.
+  interval: 1s      # Trigger the action every 3 seconds.
   times: 10         # Don't omit this!
   url: http://${consumer_host}:${consumer_9090}/artist-consumer
   method: POST       # Http trigger method.
@@ -42,7 +42,7 @@ verify:
     # max retry count
     count: 20
     # the interval between two retries
-    interval: 5s
+    interval: 10s
   cases:
     - includes:
         - ../../logging-cases.yaml
